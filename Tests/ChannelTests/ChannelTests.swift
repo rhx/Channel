@@ -49,10 +49,23 @@ class ChannelTests: XCTestCase {
         XCTAssertNil(channel.receive(timeout: .milliseconds(1)))
     }
 
+    func testClose() {
+        let channel = Channel<Int>(capacity: 1)
+        XCTAssertFalse(channel.isClosed)
+        XCTAssertNoThrow(try channel.send(1))
+        XCTAssertNoThrow(try channel.receive())
+        DispatchQueue.global(qos: .utility).async {
+            channel.close()
+        }
+        XCTAssertThrowsError(try channel.receive())
+        XCTAssertThrowsError(try channel.send(1))
+    }
+
     static var allTests = [
         ("testChannel", testChannel),
         ("testEmpty", testEmpty),
         ("testFull", testFull),
         ("testTimeout", testTimeout),
+        ("testClose", testClose),
     ]
 }

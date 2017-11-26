@@ -70,18 +70,20 @@ public class Channel<Element> {
     public func send(_ message: Element) throws {
         guard !isClosed else { throw Error.closed }
         spaceAvailable.wait()
+        defer { elementsAvailable.signal() }
+        guard !isClosed else { throw Error.closed }
         lock.sync { self.queue.enqueue(message) }
-        elementsAvailable.signal()
     }
 
     /// Dequeue an element from the channel (blocks if the channel is empty)
     ///
     /// - Returns: the oldest in-flight element on the channel
-    /// - Throws: `.closed` if no more elements are available on a closed cannel
+    /// - Throws: `.closed` if the channel is closed
     public func receive() throws -> Element {
-        guard !(isClosed && isEmpty) else { throw Error.closed }
+        guard !isClosed else { throw Error.closed }
         elementsAvailable.wait()
         defer { spaceAvailable.signal() }
+        guard !isClosed else { throw Error.closed }
         return lock.sync { self.queue.dequeue() }
     }
 
@@ -90,8 +92,9 @@ public class Channel<Element> {
     /// - Returns: the oldest in-flight element on the channel, or `nil` in case of timeout
     /// - Parameter timeout: dispatch time interval (e.g. `.seconds(1)`)
     public func receive(timeout: DispatchTimeInterval) -> Element? {
-        guard !(isClosed && isEmpty), elementsAvailable.wait(timeout: .now() + timeout) == .success else { return nil }
+        guard !isClosed, elementsAvailable.wait(timeout: .now() + timeout) == .success else { return nil }
         defer { spaceAvailable.signal() }
+        guard !isClosed else { return nil }
         return lock.sync { self.queue.dequeue() }
     }
 
@@ -100,8 +103,19 @@ public class Channel<Element> {
     /// - Returns: the oldest in-flight element on the channel, or `nil` in case of timeout
     /// - Parameter t: absolute wall time (e.g. `.now()`, `.distantFuture`)
     public func receive(by t: DispatchWallTime) -> Element? {
-        guard !(isClosed && isEmpty), elementsAvailable.wait(wallTimeout: t) == .success else { return nil }
+        guard !isClosed, elementsAvailable.wait(wallTimeout: t) == .success else { return nil }
         defer { spaceAvailable.signal() }
+        guard !isClosed else { return nil }
         return lock.sync { self.queue.dequeue() }
+    }
+
+    /// Close the channel.
+    /// This will make all pending `send()` and `receive()` operations fail.
+    public func close() {
+        isClosed = true
+        for _ in 0..<capacity {
+            spaceAvailable.signal()
+            elementsAvailable.signal()
+        }
     }
 }
