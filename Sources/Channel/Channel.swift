@@ -110,7 +110,8 @@ public class Channel<Element> {
     }
 
     /// Close the channel.
-    /// This will make all pending `send()` and `receive()` operations fail.
+    /// This will make all pending `send()` and `receive()` operations fail,
+    /// regardless of whether there are any messages currently in-flight.
     public func close() {
         isClosed = true
         for _ in 0..<capacity {
