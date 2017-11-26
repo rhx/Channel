@@ -80,8 +80,28 @@ public class Channel<Element> {
     /// - Throws: `.closed` if no more elements are available on a closed cannel
     public func receive() throws -> Element {
         guard !(isClosed && isEmpty) else { throw Error.closed }
-        defer { spaceAvailable.signal() }
         elementsAvailable.wait()
+        defer { spaceAvailable.signal() }
+        return lock.sync { self.queue.dequeue() }
+    }
+
+    /// Dequeue an element from the channel with a given timeout
+    ///
+    /// - Returns: the oldest in-flight element on the channel, or `nil` in case of timeout
+    /// - Parameter timeout: dispatch time interval (e.g. `.seconds(1)`)
+    public func receive(timeout: DispatchTimeInterval) -> Element? {
+        guard !(isClosed && isEmpty), elementsAvailable.wait(timeout: .now() + timeout) == .success else { return nil }
+        defer { spaceAvailable.signal() }
+        return lock.sync { self.queue.dequeue() }
+    }
+
+    /// Dequeue an element from the channel (blocks if the channel is empty)
+    ///
+    /// - Returns: the oldest in-flight element on the channel, or `nil` in case of timeout
+    /// - Parameter t: absolute wall time (e.g. `.now()`, `.distantFuture`)
+    public func receive(by t: DispatchWallTime) -> Element? {
+        guard !(isClosed && isEmpty), elementsAvailable.wait(wallTimeout: t) == .success else { return nil }
+        defer { spaceAvailable.signal() }
         return lock.sync { self.queue.dequeue() }
     }
 }
