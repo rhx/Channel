@@ -18,8 +18,26 @@ class ChannelTests: XCTestCase {
         XCTAssertEqual(i, 2)
     }
 
+    func testEmpty() {
+        let channel = Channel<Int>(capacity: 1)
+        XCTAssertTrue(channel.isEmpty)
+        XCTAssertNoThrow(try channel.send(1))
+        XCTAssertFalse(channel.isEmpty)
+        XCTAssertNoThrow(try channel.receive())
+        XCTAssertTrue(channel.isEmpty)
+    }
+
+    func testFull() {
+        let channel = Channel<Int>(capacity: 1)
+        XCTAssertFalse(channel.isFull)
+        XCTAssertNoThrow(try channel.send(1))
+        XCTAssertTrue(channel.isFull)
+        XCTAssertNoThrow(try channel.receive())
+        XCTAssertFalse(channel.isFull)
+    }
 
     static var allTests = [
         ("testChannel", testChannel),
+        ("testFull", testFull),
     ]
 }

@@ -36,6 +36,18 @@ public class Channel<Element> {
     public var capacity: Int { return queue.capacity }
     /// Indicate whether the channel will transmit any more elements
     public fileprivate(set) var isClosed = false
+    /// `true` if there are no elements that can currently be read
+    public var isEmpty: Bool {
+        let isEmpty = elementsAvailable.wait(timeout: .now()) == .timedOut
+        if !isEmpty { elementsAvailable.signal() }
+        return isEmpty
+    }
+    /// `true` if the channel has reached capacity
+    public var isFull: Bool {
+        let isFull = spaceAvailable.wait(timeout: .now()) == .timedOut
+        if !isFull { spaceAvailable.signal() }
+        return isFull
+    }
 
     /// Create a channel with a given capacity
     ///
@@ -67,6 +79,7 @@ public class Channel<Element> {
     /// - Returns: the oldest in-flight element on the channel
     /// - Throws: `.closed` if no more elements are available on a closed cannel
     public func receive() throws -> Element {
+        guard !(isClosed && isEmpty) else { throw Error.closed }
         defer { spaceAvailable.signal() }
         elementsAvailable.wait()
         return lock.sync { self.queue.dequeue() }
